@@ -2,35 +2,58 @@
 from bs4 import BeautifulSoup
 import requests
 
-website_data_text = requests.get('https://tardis.wiki/wiki/Max_Warp_(audio_story)').text
-soup = BeautifulSoup(website_data_text, 'lxml')
+def get_article_text(article_url):
+    article_text = requests.get(article_url).text
+    return BeautifulSoup(article_text, 'lxml')
 
-#Change this to check for '(audio story)' in the title, and remove it if so. Anthologies too?
-audiodrama_title = soup.find('h1', id = 'firstHeading').text.replace('(audio story)', '').strip()
-print("Audiodrama title: " + audiodrama_title)
-audiodrama_infobox_data = soup.find('aside', class_ = 'portable-infobox noexcerpt searchaux pi-background pi-theme-infobox pi-layout-default')
-audiodrama_data_keys = audiodrama_infobox_data.find_all('h3', 'pi-data-label pi-secondary-font')
-audiodrama_data_values = audiodrama_infobox_data.find_all('div', class_ = 'pi-data-value pi-font')
+def find_audiodrama_title(audiodrama_article):
+    title = audiodrama_article.find('h1', id = 'firstHeading').text.replace('(audio story)', '').strip()
+    return title 
 
-#Find plot - Refactor this, once we have more spoons! - Marco
-wiki_article_text = soup.find_all('p')
-summary_heading = soup.find('span', id = "Publisher's_summary")
-plot_summary = ''
+def get_infobox_data(audiodrama_article):
+    infobox_data = audiodrama_article.find('aside', class_ = 'portable-infobox noexcerpt searchaux pi-background pi-theme-infobox pi-layout-default')
+    infobox_headings = infobox_data.find_all('h3', 'pi-data-label pi-secondary-font')
+    infobox_values = infobox_data.find_all('div', class_ = 'pi-data-value pi-font')
+    infobox_data = {}
 
-page_elements = summary_heading.findParent().find_next_siblings()
-for text in page_elements:
-    if text.name == 'h2' and text.text.startswith('P'):
-        break
-    elif text.name == 'p':
-        plot_summary = plot_summary + " " + text.text.strip()
     
-print(plot_summary)
 
-if len(audiodrama_data_keys) == len(audiodrama_data_values):
-    for value_index in range(len(audiodrama_data_values)):
-        heading = audiodrama_data_keys[value_index].text.strip()
-        value = audiodrama_data_values[value_index].text.strip()
-        print(f"{heading} {value}")
-else:
-    print("Parsing error: number of headings do not match number of values.")
+    for heading, value in zip(infobox_headings, infobox_values):
+        infobox_data[heading.text] = value.text
+    
+    print(infobox_data)
+    
+    return infobox_data
+
+
+def get_plot_summary(audiodrama_article):
+    summary_heading = audiodrama_article.find('span', id = "Publisher's_summary")
+    plot_summary = ''
+
+    #Plot summary is contained within <p> tags between the Publisher's summary H2 heading, and the Plot heading
+
+    page_elements = summary_heading.findParent().find_next_siblings()
+    for element in page_elements:
+        #Find the 'Plot' heading, which is h2
+        if element.name == 'h2' and 'Plot' in element.text:
+            break
+        #Otherwise if it finds text, append the paragraph to the plot summary
+        elif element.name == 'p':
+            plot_summary = plot_summary + " " + element.text.strip()  
+
+    print(plot_summary)
+    return plot_summary 
+
+def assemble_audiodrama_data(article_url):
+    audiodrama_article_text = get_article_text(article_url)
+    audiodrama_title = find_audiodrama_title(audiodrama_article_text)
+    audiodrama_data = get_infobox_data(audiodrama_article_text)
+    audiodrama_plot_summary = get_plot_summary(audiodrama_article_text)
+
+    return audiodrama_title
+
+assemble_audiodrama_data('https://tardis.wiki/wiki/Max_Warp_(audio_story)')
+
+
+
 
