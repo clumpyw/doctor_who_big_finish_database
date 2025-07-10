@@ -26,10 +26,25 @@ def get_infobox_data(audiodrama_article):
     
     return infobox_data
 
+#Use https://tardis.wiki/wiki/Companion_Piece_(audio_story) for testing
+def set_non_doctor_infobox_data():
+    #Used for Big Finish stories that do not feature the Doctor (alternative infobox content)
+    #Replace 'Doctor' with 'Main Character(s)', and replace 'Companion(s)' with 'Featuring:'
+    audiodrama_data = {'Title' : '', 'Number of parts' : '', 'Release number' : '', 'Release date' : '', 'Main character(s)' : '', 'Featuring' : '', 'Plot_Summary' : '', 'Main setting' : '', 'Main enemy' : '', 'Writer' : '', 'Director' : '', 'Producer' : '', 'Music' : '', 'Sound' : '', 'Cover Art' : ''}
+    return audiodrama_data
 
 def get_plot_summary(audiodrama_article):
     #Find the publisher's summary heading
-    summary_heading = audiodrama_article.find('span', id = "Publisher's_summary")
+    summary_heading = None
+    summary_heading_ids = ["Publisher's_summary", "Summary", "Publisher's_Summary"]
+
+    for summary_heading_id in summary_heading_ids:
+        summary_heading = audiodrama_article.find('span', id = summary_heading_id)
+        if summary_heading != None:
+            break
+        else:
+            return 'Not Found'
+
     plot_summary = ''
 
     #Plot summary is contained within <p> tags between the Publisher's summary H2 heading, and the Plot heading
@@ -52,25 +67,49 @@ def assemble_audiodrama_data(article_url):
     audiodrama_infobox_data = get_infobox_data(audiodrama_article_text)
     audiodrama_plot_summary = get_plot_summary(audiodrama_article_text)
 
-    set_audiodrama_data(audiodrama_title, audiodrama_infobox_data, audiodrama_plot_summary)
+    if 'Doctor' not in audiodrama_infobox_data.keys():
+        alternative_audiodrama_data = set_non_doctor_infobox_data()
+        set_audiodrama_data(audiodrama_title, audiodrama_infobox_data, audiodrama_plot_summary, alternative_audiodrama_data)
+    else:    
+        set_audiodrama_data(audiodrama_title, audiodrama_infobox_data, audiodrama_plot_summary, '')
 
         
 
     return audiodrama_title
 
-def set_audiodrama_data(title, infobox_data, plot_summary):
+def initialise_audiodrama_data(audiodrama_data):
+    #Initialise all data to have a value in case it is not found in a wiki article
+    for data in audiodrama_data:
+        audiodrama_data[data] = 'Not Found'
+
+    return audiodrama_data
+
+def set_audiodrama_data(title, infobox_data, plot_summary, audiodrama_data):
     #Create a dictionary of scraped audiodrama data from the wiki page's title heading, it's infobox, and the found plot summary
     #Prefill in dictionary
-    audiodrama_data = {'Title' : '', 'Number of parts' : '', 'Release number' : '', 'Release date' : '', 'Doctor' : '', 'Companion(s)' : '', 'Plot_Summary' : '', 'Main setting' : '', 'Main enemy' : '', 'Writer' : '', 'Director' : '', 'Producer' : '', 'Music' : '', 'Sound' : '', 'Cover Art' : ''}
+    #Pass in an empty string for default data to be used
+    if audiodrama_data == '':
+        audiodrama_data = {'Title' : '', 'Number of parts' : '', 'Release number' : '', 'Release date' : '', 'Doctor' : '', 'Companion(s)' : '', 'Plot_Summary' : '', 'Main setting' : '', 'Main enemy' : '', 'Writer' : '', 'Director' : '', 'Producer' : '', 'Music' : '', 'Sound' : '', 'Cover Art' : ''}
     #Manually set values which have different headings compared to the infobox
-    audiodrama_data['Title'] = title
-    audiodrama_data['Plot_Summary'] = plot_summary
-    audiodrama_data['Cover Art'] = infobox_data['Cover by']
+
+    initialise_audiodrama_data(audiodrama_data)
+    print(audiodrama_data)    
+    
+    try:
+        audiodrama_data['Title'] = title
+        audiodrama_data['Plot_Summary'] = plot_summary
+        audiodrama_data['Cover Art'] = infobox_data['Cover by']
+    except KeyError as e:
+        with open("missing_values.txt", "a") as f:
+            f.write(f"{title} - Title, Plot Summary, or Cover Art not found!")
 
     #Loop through the infobox data, and fill in the relevant headings with their values
     for heading in infobox_data:
         if heading in audiodrama_data:
-            audiodrama_data[heading] = infobox_data[heading]
+                audiodrama_data[heading] = infobox_data[heading]
+        else:
+            with open("missing_values.txt", "a") as f:
+                f.write(f"{title} - {heading} not found!")
     
     for key in audiodrama_data:
         print(f"{key}: {audiodrama_data[key]}")
@@ -78,8 +117,28 @@ def set_audiodrama_data(title, infobox_data, plot_summary):
     return audiodrama_data
 
 
-assemble_audiodrama_data('https://tardis.wiki/wiki/Max_Warp_(audio_story)')
+#assemble_audiodrama_data('https://tardis.wiki/wiki/Max_Warp_(audio_story)')
+assemble_audiodrama_data('https://tardis.wiki/wiki/E_is_for..._(audio_story)')
 
 
+def get_audiodrama_links(list_of_audiodramas):
+    #Creates a list of audiodrama articles to be web scraped using the contents of https://tardis.wiki/wiki/List_of_audio_stories_per_Doctor
+    #Find all the contents of the table that stores all of the information on audiodramas
+    audiodrama_table = get_article_text(list_of_audiodramas).find('table', class_ = 'wikitable')
+    #Find all of the links to other articles
+    table_link_list = audiodrama_table.find_all('a')
+    audiodrama_link_list = []
+    base_url = 'https://tardis.wiki'
 
 
+    for article in table_link_list:
+        #If the linked article is about a Big Finish audiodrama, append it to the list of audiodrama articles
+        if '(audio_story)' in article['href']:
+            audiodrama_link_list.append(base_url + article['href'])
+        
+    return audiodrama_link_list
+    
+audiodrama_list_article = 'https://tardis.wiki/wiki/List_of_audio_stories_per_Doctor'
+audiodrama_links = get_audiodrama_links(audiodrama_list_article)
+for link in audiodrama_links:
+    assemble_audiodrama_data(link)
